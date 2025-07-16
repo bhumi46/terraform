@@ -1,43 +1,18 @@
-# Define Terraform required providers
 terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "5.48.0"
     }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "3.70.0"
-    }
-    google = {
-      source  = "hashicorp/google"
-      version = "4.70.0"
-    }
   }
 }
 
-# Input variable to determine the cloud provider
-variable "provider" {
-  description = "Cloud provider to use: 'aws', 'azure', or 'gcp'"
-  type        = string
-  default     = "aws"
-}
+# provider "aws" {
+# Profile `default` means it will take credentials AWS_SITE_KEY & AWS_SECRET_EKY from ~/.aws/config under `default` section.
+# profile = "default"
+# region = "ap-south-1"
+# }
 
-# Provider configuration for AWS
-provider "aws" {
-  region = var.AWS_PROVIDER_REGION
-}
-
-# Provider configuration for Azure
-provider "azurerm" {
-  features {}
-}
-
-# Provider configuration for GCP
-provider "google" {
-  project = var.GCP_PROJECT_ID
-  region  = var.GCP_REGION
-}
 
 locals {
   DNS_RECORDS = {
@@ -100,16 +75,16 @@ locals {
   }
 }
 
-# Dynamic selection of the resource-creation module based on the provider
-module "resource_creation" {
-  source = "./modules/resource-creation/${var.provider}-resource-creation"
-  source                        = "./modules/aws-resource-creation"
+module "aws-resource-creation" {
+
+  #source = "github.com/mosip/mosip-infra//deployment/v3/terraform/aws/modules/aws-resource-creation?ref=develop"
+  source                        = "./aws-resource-creation"
   CLUSTER_NAME                  = var.CLUSTER_NAME
   AWS_PROVIDER_REGION           = var.AWS_PROVIDER_REGION
   SSH_KEY_NAME                  = var.SSH_KEY_NAME
   K8S_INSTANCE_TYPE             = var.K8S_INSTANCE_TYPE
   NGINX_INSTANCE_TYPE           = var.NGINX_INSTANCE_TYPE
-  CLUSTER_ENV_DOMAIN                  = var.CLUSTER_ENV_DOMAIN
+  CLUSTER_ENV_DOMAIN            = var.CLUSTER_ENV_DOMAIN
   ZONE_ID                       = var.ZONE_ID
   AMI                           = var.AMI
   K8S_INSTANCE_ROOT_VOLUME_SIZE = var.K8S_INSTANCE_ROOT_VOLUME_SIZE
@@ -416,11 +391,11 @@ module "resource_creation" {
 
 
 module "nginx-setup" {
-  depends_on = [module.resource-creation]
+  depends_on = [module.aws-resource-creation]
   #source     = "github.com/mosip/mosip-infra//deployment/v3/terraform/aws/modules/nginx-setup?ref=develop"
-  source                                  = "./modules/nginx-setup"
+  source                                  = "./nginx-setup"
   NGINX_PUBLIC_IP                         = module.aws-resource-creation.NGINX_PUBLIC_IP
-  CLUSTER_ENV_DOMAIN                            = var.CLUSTER_ENV_DOMAIN
+  CLUSTER_ENV_DOMAIN                      = var.CLUSTER_ENV_DOMAIN
   MOSIP_K8S_CLUSTER_NODES_PRIVATE_IP_LIST = module.aws-resource-creation.MOSIP_K8S_CLUSTER_NODES_PRIVATE_IP_LIST
   MOSIP_PUBLIC_DOMAIN_LIST                = module.aws-resource-creation.MOSIP_PUBLIC_DOMAIN_LIST
   CERTBOT_EMAIL                           = var.MOSIP_EMAIL_ID
@@ -431,9 +406,9 @@ module "nginx-setup" {
 
 
 module "rke2-setup" {
-  depends_on = [module.resource-creation]
+  depends_on = [module.aws-resource-creation]
   #source     = "github.com/mosip/mosip-infra//deployment/v3/terraform/aws/modules/rke2-setup?ref=develop"
-  source = "./modules/rke2-cluster"
+  source = "./rke2-cluster"
 
   SSH_PRIVATE_KEY         = var.SSH_PRIVATE_KEY
   K8S_INFRA_BRANCH        = var.K8S_INFRA_BRANCH
@@ -443,12 +418,12 @@ module "rke2-setup" {
 }
 
 module "nfs-setup" {
-  depends_on = [module.resource-creation, module.rke2-setup]
-  source = "./modules/nfs-setup"
+  depends_on          = [module.aws-resource-creation, module.rke2-setup]
+  source              = "./nfs-setup"
   NFS_SERVER_LOCATION = "/srv/nfs/mosip/${var.CLUSTER_ENV_DOMAIN}"
-  NFS_SERVER = module.aws-resource-creation.NGINX_PRIVATE_IP
-  SSH_PRIVATE_KEY=var.SSH_PRIVATE_KEY
-  K8S_INFRA_REPO_URL = var.K8S_INFRA_REPO_URL
-  K8S_INFRA_BRANCH = var.K8S_INFRA_BRANCH
-  CLUSTER_NAME = var.CLUSTER_NAME
+  NFS_SERVER          = module.aws-resource-creation.NGINX_PRIVATE_IP
+  SSH_PRIVATE_KEY     = var.SSH_PRIVATE_KEY
+  K8S_INFRA_REPO_URL  = var.K8S_INFRA_REPO_URL
+  K8S_INFRA_BRANCH    = var.K8S_INFRA_BRANCH
+  CLUSTER_NAME        = var.CLUSTER_NAME
 }
